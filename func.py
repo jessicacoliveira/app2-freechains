@@ -13,7 +13,8 @@ def inicializa():
     # Lista de peers que será usada na simulacao
     with open("contatos.txt", "a") as arquivo:
         arquivo.write(f"{PORTA}\n")
-      
+
+        
 # Sincroniza com os demais peers da lista de contatos     
 def sincronize(canal):
     with open("contatos.txt", "r") as arquivo:
@@ -22,6 +23,8 @@ def sincronize(canal):
         if peer != PORTA:
             subprocess.run(["./freechains", f"--host=localhost:{PORTA}", "peer", f"localhost:{peer}", "send", f"{canal}"])
 
+
+    
 # Gera um par de chaves pública e privada a partir de uma palavra-chave
 def criarPubpvt(keyword):
     resultado = subprocess.run(["./freechains", f"--host=localhost:{PORTA}", "keys", "pubpvt", keyword], stdout=subprocess.PIPE, text=True)
@@ -247,6 +250,8 @@ def buscaSolicitacoesAnuncio (canal, hash_anuncio):
 def printSolicitacoesAnunciosDisponiveis (canal, chave):
     disponiveis = getAnunciosDisponiveis(canal)
     disponiveisAutor = getAnunciosAutor(canal, disponiveis, chave)
+    if not disponiveisAutor:
+        print(f"Nenhuma solicitacao registrada para meus anúncios.")
     for hash_post in disponiveisAutor:
         printBuscaSolicitacoesAnuncio(canal, hash_post)
     
@@ -255,7 +260,7 @@ def printSolicitacoesAnunciosDisponiveis (canal, chave):
 def printBuscaSolicitacoesAnuncio(canal, hash_anuncio):
     resultados = buscaSolicitacoesAnuncio (canal, hash_anuncio)
     if not resultados:
-        print(f"Nenhuma solicitacao registrada para esse anúncio.")
+        print(f"Nenhuma solicitacao registrada para o anúncio {hash_anuncio}")
     for hash_post in resultados:
         printSolicitacao (canal, hash_post)
 
@@ -399,27 +404,60 @@ def escolhaEmprestimo(canal, hash_anuncio):
     retorno = "vazio"
     for i in range(indice + 1, len(hash_list)):
         bloco = getPayload(hash_list[i], canal)
-        if int(getTypeBloco(canal, hash_list[i])) == 3 and bloco.get("Anuncio") == hash_anuncio:
+        tipo = int(getTypeBloco(canal, hash_list[i]))
+        
+        if tipo == 3 and bloco.get("Anuncio") == hash_anuncio:
             return "indisponivel"
-        elif int(getTypeBloco(canal, hash_list[i])) == 2 and bloco.get("Solicitando") == hash_anuncio and aux == 0:
+        elif tipo == 2 and bloco.get("Solicitando") == hash_anuncio and aux == 0:
             retorno = hash_list[i]
             aux=1
+            
     return retorno
     
-def atualizarEmprestimo(canal, ):
-    lista = getAnunciosDisponiveisAutor(canal, chave)
-    for hash_post in lista:
-        bloco = getPayload(hash_list[i], canal)
+def atualizarEmprestimo(canal, chave_pub, chave_pvt):
+    lista = getAnunciosDisponiveisAutor(canal, chave_pub)
+    if not lista:
+        print("Nenhuma nova solicitacao para emprestimo.")
+    for hash_anuncio in lista:
+        bloco = getPayload(hash_anuncio, canal)
+        if bloco.get("Tipo_transacao") == "Emprestimo":
+            printEscolhaEmprestimo(canal, hash_anuncio, chave_pvt, bloco.get("Descricao"), bloco.get("Prazo"))
 
 def printEscolhaEmprestimo(canal, hash_anuncio, chave, mensagem, prazo):
     retorno = escolhaEmprestimo(canal, hash_anuncio)
     if retorno == "vazio":
-        print(f"ERRO: nenhuma solicitacao para {hash_anuncio} foi encontrada.")
-    if retorno == "indisponivel":
+        print(f"Nenhuma nova solicitacao para {hash_anuncio} foi encontrada.")
+    elif retorno == "indisponivel":
         print("ERRO: bloco de aceite encontrado. Anuncio nao esta mais disponivel.")
     else:
         aceitarSolicitacao(canal, retorno, chave, mensagem, prazo)
-        print(f"Solicitacao {retorno} escolhida. Bloco de aceite gerado com sucesso!")
+        print(f"Solicitacao {retorno} escolhida para {hash_anuncio}. Bloco de aceite gerado com sucesso!")
+
+# Exibe a lista de anúncios de troca disponíveis para a escolha de um usuário específico
+def printAnunciosTrocaDisponiveis(canal, chave):
+    lista = getAnunciosDisponiveisAutor(canal, chave_pub)
+    if not lista:
+        print("Nenhuma solicitacao de troca disponivel.")
+    for hash_anuncio in lista:
+        bloco = getPayload(hash_anuncio, canal)
+        if bloco.get("Tipo_transacao") == "Troca":
+            printAnuncio(canal, hash_anuncio)
+            
+def printSolicitacoesTrocaAnunciosDisponiveis (canal, chave):
+    disponiveis = getAnunciosDisponiveis(canal)
+    disponiveisAutor = getAnunciosAutor(canal, disponiveis, chave)
+    
+    if not disponiveisAutor:
+        print(f"Nenhum anúncio próprio disponível.")
+        return
+        
+    for hash_anuncio in disponiveisAutor:
+        bloco = getPayload(hash_anuncio, canal)
+        if bloco.get("Tipo_transacao") == "Troca":
+            resultados = buscaSolicitacoesAnuncio (canal, hash_anuncio)
+            for hash_post in resultados:
+                printSolicitacao (canal, hash_post)
+
 
 # Cria o bloco de aceite
 def aceitarSolicitacao(canal, hash_post, chave, mensagem, prazo):
@@ -485,5 +523,3 @@ def registrarAvaliacao (canal, hash_post, mensagem, tipo_interacao, chave):
     
     return resultado
  
-
-        
