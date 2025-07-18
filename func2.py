@@ -1,20 +1,25 @@
 import subprocess, json, random, time, sys
 HASH_CONSENSUS = []
 ANUNCIOS = []
+ANUNCIOS_DISPONIVEIS = []
+SOLICITACOES = []
+SOLICITACOES_DISPONIVEIS = []
+SOLICITACOES_INDISPONIVEIS = []
+SOLICITACOES_REJEITADAS = []
 
 #PORTA = random.randint(5000, 6000)
 PORTA = 5000
 
 # Chamar sempre que lista de anuncios precisar ser atualizada
 def atualizarEstadoAnuncios(canal):
-    global HASH_CONSENSUS, ANUNCIOS
+    global HASH_CONSENSUS, ANUNCIOS, ANUNCIOS_DISPONIVEIS
     
     HASH_CONSENSUS = getConsensus(canal)
     ANUNCIOS_DISPONIVEIS = atualizaAnunciosDisponiveis(canal)
 
 # Atualiza lista de Anúncios Disponíveis
 def atualizaAnunciosDisponiveis(canal):
-    global HASH_CONSENSUS, ANUNCIOS_DISPONIVEIS
+    global HASH_CONSENSUS
     lista = []
     for hash_post in HASH_CONSENSUS:
         if int(isLikeOrDislike(canal, hash_post)) == 0: #Identifica se eh bloco de conteudo
@@ -22,8 +27,31 @@ def atualizaAnunciosDisponiveis(canal):
                 status = definirDisponibilidadeAnuncio(canal, hash_post)
                 if status == "disponivel":
                     lista.append(hash_post)
-    ANUNCIOS_DISPONIVEIS = lista
+     return lista
 
+def atualizarEstadoSolicitacoes(canal, chave):
+    global HASH_CONSENSUS, SOLICITACOES, SOLICITACOES_DISPONIVEIS
+    global SOLICITACOES_INDISPONIVEIS, SOLICITACOES_REJEITADAS
+
+    HASH_CONSENSUS = getConsensus(canal)
+    SOLICITACOES = []
+    SOLICITACOES_DISPONIVEIS = []
+    SOLICITACOES_INDISPONIVEIS = []
+    SOLICITACOES_REJEITADAS = []
+
+    for hash_post in HASH_CONSENSUS:
+        if int(isLikeOrDislike(canal, hash_post)) == 0:  # é bloco de conteúdo
+            if int(getTypeBloco(canal, hash_post)) == 2:  # é solicitação
+                SOLICITACOES.append(hash_post)
+                autor_bloco = getAutor(canal, hash_post)
+                if autor_bloco == chave:
+                    status = definirStatusSolicitacao(canal, hash_post)
+                    if status == "disponivel":
+                        SOLICITACOES_DISPONIVEIS.append(hash_post)
+                    elif status == "aceita":
+                        SOLICITACOES_INDISPONIVEIS.append(hash_post)
+                    elif status == "rejeitada":
+                        SOLICITACOES_REJEITADAS.append(hash_post)
 
 # Inicia o servidor na porta aleatória escolhida
 def inicializa():
@@ -248,6 +276,7 @@ def buscaTitulo (canal, keyword):
             resultados.append(hash_post)
     return resultados
 
+# Cria um bloco de Solicitacao na cadeia
 def placeSolicitacao(canal, hash_post, chave, mensagem, contato):
     
     item = {
@@ -261,7 +290,8 @@ def placeSolicitacao(canal, hash_post, chave, mensagem, contato):
     resultado = postBloco(json_item, chave, canal)
     
     return resultado
-
+    
+# Exibe na tela o conteudo de um bloco do tipo solicitacao    
 def printSolicitacao (canal, hash_post):
     bloco = getPayload(hash_post, canal)
     
@@ -272,84 +302,87 @@ def printSolicitacao (canal, hash_post):
     
     print("=== Solicitacao ===")
     print(f"ID do bloco: {hash_post}")
-    print(f"Tipo do bloco: {tipo_bloco}")
+    #print(f"Tipo do bloco: {tipo_bloco}")
     print(f"Solicitando: {solicitando}")
     print(f"Proposta: {proposta}")
     print(f"Contato: {contato}")
     print("================\n")
 
+# Exibe na tela todos os anúncios de uma lista genérica
+def printListaSolicitacoes (canal, lista):
+    if not lista:
+        print("Nenhuma solicitacao para exibir.")
+        return
+    for hash_post in lista:
+        printSolicitacao(canal, hash_post)
+
+def printSolicitacoesDisponiveis(canal):
+    global SOLICITACOES_DISPONIVEIS
+    lista = SOLICITACOES_DISPONIVEIS
+    printListaSolicitacoes (canal, lista)
+    
+def printSolicitacoesIndisponiveis(canal):
+    global SOLICITACOES_INDISPONIVEIS
+    lista = SOLICITACOES_INDISPONIVEIS
+    printListaSolicitacoes (canal, lista)
+    
+def printSolicitacoesRejeitadas(canal):
+    global SOLICITACOES_REJEITADAS
+    lista = SOLICITACOES_REJEITADAS
+    printListaSolicitacoes (canal, lista)
+
 #Exibe todas as solicitacoes da cadeia
 def printAllSolicitacoes(canal):
-    hash_list = getConsensus(canal)
+    lista = getListaSolicitacoes(canal)
+    printListaSolicitacoes (canal, lista)
     
-    if len(hash_list) == 1:
-        print("Não há anúncios a serem exibidos.")
-    else:
-        for hash_post in hash_list:
-            tipo1 = int(isLikeOrDislike(canal, hash_post))
-            if tipo1 == 0:
-                tipo2 = int(getTypeBloco(canal, hash_post))
-                if tipo2 == 2:
-                    printSolicitacao(canal, hash_post)
-
-#Busca solicitações postadas por um autor específico
-def buscaSolicitacoesChave (canal, chave):
-    hash_list = getConsensus(canal)
-    resultados = []
-    
-    for hash_post in hash_list:
-        tipo1 = int(isLikeOrDislike(canal, hash_post))
-        if tipo1 == 0:
-            tipo2 = int(getTypeBloco(canal, hash_post))
-            if tipo2 == 2:
-                bloco = getBloco(canal, hash_post)
-                autor_bloco = getAutor(canal, hash_post)
-            
-                if autor_bloco == chave:
-                    resultados.append(hash_post)
-    return resultados
-    
-#Exibe as solicitações encontradas na busca
+#Exibe as solicitações feitas por autor especifico
 def printBuscaSolicitacoesChave(canal, chave):
-    resultados = buscaSolicitacoesChave (canal, chave)
-    if not resultados:
-        print(f"Nenhuma solicitacao registrada com essa chave.")
-    for hash_post in resultados:
-        printSolicitacao (canal, hash_post)
-    
-#Busca solicitações associadas a um anúncio específico
-def buscaSolicitacoesAnuncio (canal, hash_anuncio):
-    hash_list = getConsensus(canal)
-    resultados = []
-    
-    for hash_post in hash_list:
-        tipo1 = int(isLikeOrDislike(canal, hash_post))
-        if tipo1 == 0:
-            tipo2 = int(getTypeBloco(canal, hash_post))
-            if tipo2 == 2:
-                bloco = getPayload(hash_post, canal)
-                solicitando = bloco.get("Solicitando", "Erro")           
-                if solicitando == hash_anuncio:
-                    resultados.append(hash_post)
-    return resultados
-
-def printSolicitacoesAnunciosDisponiveis (canal, chave):
-    disponiveis = getAnunciosDisponiveis(canal)
-    disponiveisAutor = getAnunciosAutor(canal, disponiveis, chave)
-    if not disponiveisAutor:
-        print(f"Nenhuma solicitacao registrada para meus anúncios.")
-    for hash_post in disponiveisAutor:
-        printBuscaSolicitacoesAnuncio(canal, hash_post)
-    
+    lista = buscaSolicitacoesChave (canal, chave)
+    printListaSolicitacoes (canal, lista)
 
 #Exibe as solicitações encontradas na busca
 def printBuscaSolicitacoesAnuncio(canal, hash_anuncio):
-    resultados = buscaSolicitacoesAnuncio (canal, hash_anuncio)
+    lista = buscaSolicitacoesAnuncio (canal, hash_anuncio)
     if not resultados:
         print(f"Nenhuma solicitacao registrada para o anúncio {hash_anuncio}")
-    for hash_post in resultados:
-        printSolicitacao (canal, hash_post)
+        return
+    printListaSolicitacoes (canal, lista)
 
+# Exibe solicitações para anúncios disponíveis de um dado autor
+def printSolicitacoesAnunciosDisponiveis (canal, chave):
+    lista = getAnunciosDisponiveisAutor(canal, chave)
+    if not lista:
+        print(f"Nenhuma solicitacao registrada para meus anúncios.")
+        return
+    for hash_post in lista:
+        printBuscaSolicitacoesAnuncio(canal, hash_post)
+
+#Busca solicitações postadas por um autor específico
+def buscaSolicitacoesChave (canal, chave):
+    global SOLICITACOES
+    resultados = []
+    
+    for hash_post in SOLICITACOES:
+        bloco = getBloco(canal, hash_post)
+        autor_bloco = getAutor(canal, hash_post)
+        if autor_bloco == chave:
+            resultados.append(hash_post)
+    return resultados
+
+#Busca solicitações associadas a um anuncio especifico
+def buscaSolicitacoesAnuncio (canal, hash_anuncio):
+    global SOLICITACOES
+    resultados = []
+    
+    for hash_post in SOLICITACOES:
+        bloco = getPayload(hash_post, canal)
+        solicitando = bloco.get("Solicitando", "Erro")           
+        if solicitando == hash_anuncio:
+            resultados.append(hash_post)
+    return resultados
+
+# Devolve listas de solicitacoes disponiveis, aceitas e rejeitadas de autor específico
 def getSolicitacoes(canal, chave):
     hash_list = buscaSolicitacoesChave (canal, chave)
     sol_disponiveis = []
@@ -364,44 +397,48 @@ def getSolicitacoes(canal, chave):
         else:
             sol_rejeitadas.append(hash_post)
     return sol_disponiveis, sol_aceitas, sol_rejeitadas
-
-def printListaSolicitacoes(canal, hash_list):
-    if not hash_list:
-        print("Nenhuma solicitacao a ser exibida.")
-        return
-    for hash_post in hash_list:
-        printSolicitacao (canal, hash_post)
-
+    
+# Classifica as solicitacoes em disponivel, aceita e rejeitada
 def definirStatusSolicitacao(canal, hash_solicitacao):
-    hash_list = getConsensus(canal)
+    global HASH_CONSENSUS
     bloco = getPayload(hash_solicitacao, canal)
     hash_anuncio = bloco.get("Solicitando", "")
-    indice = hash_list.index(hash_anuncio)
+    indice = HASH_CONSENSUS.index(hash_anuncio)
     
-    for i in range(indice + 1, len(hash_list)):
-        bloco = getPayload(hash_list[i], canal)
-        if int(getTypeBloco(canal, hash_list[i])) == 3 and bloco.get("Anuncio") == hash_anuncio:
+    for i in range(indice + 1, len(HASH_CONSENSUS)):
+        bloco = getPayload(HASH_CONSENSUS[i], canal)
+        if int(getTypeBloco(canal, HASH_CONSENSUS[i])) == 3 and bloco.get("Anuncio") == hash_anuncio:
             if bloco.get("Solicitacao") == hash_solicitacao:
                 return "aceita"
             else:
                 return "rejeitada"
     return "disponivel"
-
-# ---------------
-
+    
+# Devolve o hash do anuncio ao qual a solicitacao se refere
 def getAnuncioSolicitacao(hash_post, canal):
     bloco = getPayload(hash_post, canal)
     return bloco.get("Solicitando", "")
 
+# Classifica os anuncios em disponivel e indisponivel
 def definirDisponibilidadeAnuncio(canal, hash_anuncio):
-    hash_list = getConsensus(canal)
-    indice = hash_list.index(hash_anuncio)
+    global HASH_CONSENSUS
+    indice = HASH_CONSENSUS.index(hash_anuncio)
     
-    for i in range(indice + 1, len(hash_list)):
-        bloco = getPayload(hash_list[i], canal)
-        if int(getTypeBloco(canal, hash_list[i])) == 3 and bloco.get("Anuncio") == hash_anuncio:
-            return hash_list[i]  # Retorna o hash do aceite encontrado
+    for i in range(indice + 1, len(HASH_CONSENSUS)):
+        bloco = getPayload(HASH_CONSENSUS[i], canal)
+        if int(getTypeBloco(canal, HASH_CONSENSUS[i])) == 3 and bloco.get("Anuncio") == hash_anuncio:
+            return "indisponivel" 
     return "disponivel"
+
+# Devolve a lista completa de Solicitacoes a partir do CONSENSUS    
+def getListaSolicitacoes(canal):
+    global HASH_CONSENSUS
+    lista = []
+    for hash_post in HASH_CONSENSUS:
+        if int(isLikeOrDislike(canal, hash_post)) == 0: #Identifica se eh bloco de conteudo
+            if int(getTypeBloco(canal, hash_post)) == 2:  # Identifica se eh bloco de Anúncio
+                lista.append(hash_post)
+    return lista
   
 '''
 def getAnunciosDisponiveis(canal):
