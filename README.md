@@ -6,10 +6,16 @@ Implementação de um protótipo de aplicação que gerencia, de forma descentra
 ## Instruções de uso:
 * Todos os arquivos devem ser executado no diretório que contém os executáveis `freechains` e `freechains-host`;
 * É necessário ter o `gnome-terminal` instalado;
-* Utilize o arq1.txt fornecido para alimentar a aplicação com anúncios;
-* A simulação disponibilizada deve ser executada da mesma forma. Ela inicializa 3 usuários que postam anúncios que podem ser visualizados através do menu. Solicitações para eles podem ser feitas normalmente através do menu. Nenhuma anomalia foi identificada. **A simulação indica que a lógica da aplicação funciona para múltiplos usuários**.
+* Por comodidade, utilize o arq1.txt fornecido para alimentar a aplicação com alguns anúncios;
 * ### Em caso de erro durante a execução use rm -rf /tmp/freechains/host05000/ antes de executar novamente
   (Costuma funcionar. Entrar no menu principal e só sair também.)
+
+## Simulação 1
+- Inicializa 3 usuários nas portas 5001, 5002 e 5003 que postam anúncios na cadeia. Esses anúncios podem ser visualizados através do menu. Solicitações para eles também podem ser feitas normalmente através do menu.
+
+- Observe que o protótipo normalmente permite que um usuário publique e faça transações com os próprios anúncios para facilitar os testes. Dessa forma, uma solicitação feita pelo próprio usuário também aparece na área de "Ver Solicitações para Meus Anúncios", por exemplo. *Na simulação isso não ocorre*, pois os blocos foram publicados por outros usuários e esses menus são pessoais. Isso reforça que a lógica implementada já suporta múltiplos usuários.
+
+- Na simulação 2 que está sendo implementada, o objetivo é checar com múltiplos usuários o mecanismo de aceite do empréstimo implementado utilizando o consenso do Freechains.
 
 ## Funcionalidades:
 
@@ -19,9 +25,8 @@ Implementação de um protótipo de aplicação que gerencia, de forma descentra
 3. `Gerenciamento de anúncios:` exibe todos os **anúncios do usuário**, mostra as **solicitações recebidas** para cada anúncio e permite **aceitar solicitações** de empréstimo (via consenso) ou troca (escolha manual).
 4. `Gerenciamento de solicitações:` **exibe as solicitações** feitas pelo usuário, separadas por status: `ativas` (sem bloco de aceite na cadeia), `aceitas` ou `rejeitadas`.
 5. `Gerenciamento de transações:` permite **registrar eventos de retirada e devolução** de itens, **visualizar recibos** gerados na cadeia e **registrar avaliações** positivas ou negativas.
-6. `Sincronizar com a rede (útil apenas em simulações):` permite **sincronizar com outras portas** que estejam executando a aplicação.
-7. `Consultar reputação:` permite **consultar a reputação** de outro **usuário** ou a reputação atribuída a um **bloco** específico.
-8. `Simulação de login:` gera e registra **chaves públicas/privadas** com base em um nickname fornecido pelo usuário.
+6. `Consultar reputação:` permite **consultar a reputação** de outro **usuário** ou a reputação atribuída a um **bloco** específico.
+7. `Simulação de login:` gera e registra **chaves públicas/privadas** com base em um nickname fornecido pelo usuário.
 
 ### Falta Implementar
 1. `Mecanismo de disputa:`;
@@ -45,6 +50,15 @@ Implementação de um protótipo de aplicação que gerencia, de forma descentra
 4. Bibliotecas que não precisam de instalação prévia: `subprocess`, `json` e `time`.
 
 # Detalhes de Funcionamento (em construção)
+
+## Menus
+
+- `Criar anúncios:` criação manual ou carregamento de arquivo;
+- `Busca de Objetos:` visualização de anúncios, curtidas e denúncias de anúncios e *realizar solicitações*;
+- `Meus Anúncios:` área de gerenciamento pessoal dos anúncios que permite a *realizar aceites*;
+- `Minhas Solicitações:` área de visualização das solicitações que foram feitas (sem resposta, aceitas e rejeitadas);
+- `Minhas Transações:` permite gerenciar transações de *retirada* e *devolução* de aceites em aberto, além de gerar recibos e visualizá-los;
+- `Consultar Reputação:` permite checar a reputação de usuários e blocos
 
 ## Blocos internos da aplicação
 
@@ -119,4 +133,3 @@ Feedback sobre a interação. Sempre associado a um bloco de like/dislike.
 * A opção de devolução só fica disponível se o anúncio de referência for de empréstimo e se houver sido registrado um bloco de retirada para ele.
 * Um bloco de recibo é postado na cadeia quando uma transação é finalizada. Para trocas, o recibo é "emitido" após a retirada. Para empréstimos, após a devolução.
 * Uma avaliação pode ser feita a qualquer momento, por qualquer motivo. Como é composta de 2 blocos (like/dislike + bloco textual para o motivo), custa 2 reps. Denúncias seguem o mesmo modelo e também custam 2 reps. Curtir anúncios custa 1 bloco de like/dislike normal, ou seja, 1 rep.
-* (README sendo atualizado aos poucos para priorizar implementação)
