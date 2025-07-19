@@ -1,4 +1,4 @@
-import func3 as fc
+import funcoes as fc
 import subprocess
 
 canal = "#Burgo66"
