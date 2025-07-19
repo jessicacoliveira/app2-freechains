@@ -1,10 +1,10 @@
 import funcoes as fc
 import subprocess
 
-canal = "#Burgo66"
+canal = "#Burgo"
 key_pub = ""
 key_pvt = ""
-arquivo = "arq1.txt"
+arquivo = ""
 
 # Inicia servidor
 fc.inicializa()
