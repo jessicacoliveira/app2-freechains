@@ -343,7 +343,7 @@ while True:
                     ID = fc.registrarAvaliacao (canal, hash_post, mensagem, -1, key_pvt)
                 print("Processando...\n")
                 fc.atualizarEstadoAnuncios(canal)
-                print(f"Avaliacao {ID} registrada!")
+                print(f"Avaliacao registrada!")
                 input("\nPressione Enter para continuar...")
                 clear()
             elif subopcao == "0":
