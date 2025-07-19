@@ -22,7 +22,7 @@ def menuPrincipal():
 3 - Meus Anúncios
 4 - Minhas Solicitações
 5 - Minhas Transações
-6 - Sincronizar com a Rede
+6 - Sincronizar com a Rede (em construção)
 7 - Consultar Reputação
 0 - Sair
 """)
@@ -351,10 +351,6 @@ while True:
                 
             else:
                 print("\nOpção inválida.\n")
-    
-    elif opcao == "6":
-        sincronizarRede()
-        input("Pressione Enter para voltar...")
 
     elif opcao == "7": #Menu Consultar Reputação
         clear()
