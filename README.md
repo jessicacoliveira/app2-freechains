@@ -4,8 +4,12 @@
 Implementação de um protótipo de aplicação que gerencia, de forma descentralizada, trocas e empréstimos de objetos entre usuários, permitindo publicar anúncios, registrar solicitações, acompanhar transações e avaliar participantes/interações.
 
 ## Instruções de uso:
-* O script deve ser executado no diretório que contém os executáveis `freechains` e `freechains-host`;
+* Todos os arquivos devem ser executado no diretório que contém os executáveis `freechains` e `freechains-host`;
 * É necessário ter o `gnome-terminal` instalado;
+* Utilize o arq1.txt fornecido para alimentar a aplicação com anúncios;
+* A simulação disponibilizada deve ser executada da mesma forma. Ela inicializa 3 usuários que postam anúncios que podem ser visualizados através do menu. Solicitações para eles podem ser feitas normalmente através do menu. Nenhuma anomalia foi identificada. **A simulação indica que a lógica da aplicação funciona para múltiplos usuários**.
+* ### Em caso de erro durante a execução use rm -rf /tmp/freechains/host05000/ antes de executar novamente
+  (Costuma funcionar. Entrar no menu principal e só sair também.)
 
 ## Funcionalidades:
 
@@ -26,13 +30,21 @@ Implementação de um protótipo de aplicação que gerencia, de forma descentra
 4. `Bootstrapping adequado para novos usuários`;
 5. `Visualização das avaliações em forma de relatório`;
 6. `Cancelamento de transação`;
-7. `Simulações mais robustas`.
+7. `Sincronização entre peers`: só funcionaria em simulações;
+8. `Tratamento de erros`;
+9. `Simulações mais robustas`.
 
-### Fora de Escopo do Protótipo
+### Fora de Escopo
 1. `Interface gráfica`;
 2. `Sistema de login`.
 
-# Detalhes de Funcionamento
+### Ferramentas utilizadas
+1. Sistema operacional `Linux`;
+2. `Freechains` v.0.10.1;
+3. `Python3`;
+4. Bibliotecas que não precisam de instalação prévia: `subprocess`, `json` e `time`.
+
+# Detalhes de Funcionamento (em construção)
 
 ## Blocos internos da aplicação
 
@@ -98,11 +110,13 @@ Feedback sobre a interação. Sempre associado a um bloco de like/dislike.
 4. `Referência user:` ID hash do usuário do bloco que foi avaliado
 5. `Mensagem:` motivo da avaliação
 
+## Regras da aplicação:
 
-
-
-
-## Ferramentas utilizadas
-* Sistema operacional Linux.
-* Freechains v.0.10.1
-* Python3.
+* Anúncios deixam de estar disponíveis quando associados a um bloco de aceite. O mesmo para uma solicitação.
+* A escolha de uma solicitação é automática (escolha do Consenso do Freechains) para anúncios de Empréstimo. Para anúncio de Troca, a escolha é feita manualmente por quem o publicou. A escolha gera um bloco de aceite.
+* Um bloco de aceite fica disponível até que um bloco de recibo (que indica finalização da transação) seja associado a ele.
+* A opção de retirada só fica ativa para aceites disponíveis e se não houver um bloco de retirada já associado a um aceite disponível.
+* A opção de devolução só fica disponível se o anúncio de referência for de empréstimo e se houver sido registrado um bloco de retirada para ele.
+* Um bloco de recibo é postado na cadeia quando uma transação é finalizada. Para trocas, o recibo é "emitido" após a retirada. Para empréstimos, após a devolução.
+* Uma avaliação pode ser feita a qualquer momento, por qualquer motivo. Como é composta de 2 blocos (like/dislike + bloco textual para o motivo), custa 2 reps. Denúncias seguem o mesmo modelo e também custam 2 reps. Curtir anúncios custa 1 bloco de like/dislike normal, ou seja, 1 rep.
+(sendo atualizado aos poucos por falta de tempo)
