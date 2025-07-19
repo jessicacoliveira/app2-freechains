@@ -119,4 +119,4 @@ Feedback sobre a interação. Sempre associado a um bloco de like/dislike.
 * A opção de devolução só fica disponível se o anúncio de referência for de empréstimo e se houver sido registrado um bloco de retirada para ele.
 * Um bloco de recibo é postado na cadeia quando uma transação é finalizada. Para trocas, o recibo é "emitido" após a retirada. Para empréstimos, após a devolução.
 * Uma avaliação pode ser feita a qualquer momento, por qualquer motivo. Como é composta de 2 blocos (like/dislike + bloco textual para o motivo), custa 2 reps. Denúncias seguem o mesmo modelo e também custam 2 reps. Curtir anúncios custa 1 bloco de like/dislike normal, ou seja, 1 rep.
-(sendo atualizado aos poucos por falta de tempo)
+* (README sendo atualizado aos poucos para priorizar implementação)
