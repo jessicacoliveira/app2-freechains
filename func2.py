@@ -1,18 +1,37 @@
 import subprocess, json, random, time, sys
+PIONEIRO_PUB = "658408B61EC302CA6219136876E2FE097C1575CA0477FC42209FD761F05F04EB"
+PIONEIRO_PVT = "35A8B15B2B6E2A7EA035A97C2C5145D9E3CC431039790649F10607A41DD151EE658408B61EC302CA6219136876E2FE097C1575CA0477FC42209FD761F05F04EB"
+KEY_PUB = ""
 HASH_CONSENSUS = []
 ANUNCIOS = []
 ANUNCIOS_DISPONIVEIS = []
 SOLICITACOES = []
 SOLICITACOES_DISPONIVEIS = []
-SOLICITACOES_INDISPONIVEIS = []
+SOLICITACOES_ACEITAS = []
 SOLICITACOES_REJEITADAS = []
+ACEITES = []
+ACEITES_DISPONIVEIS = []
+RETIRADAS = []
+RETIRADAS_ATIVAS = []
+RECIBOS = []
 
 #PORTA = random.randint(5000, 6000)
 PORTA = 5000
 
+# Usar quando a houver intenção de reaproveitar alguma cadeia (as listas começam vazias)
+def atualizaEstadoTudo (canal, chave):
+    atualizarEstadoAnuncios(canal)
+    atualizarEstadoSolicitacoes(canal, chave)
+    atualizarEstadoRecibos(canal)
+    atualizarEstadoAceites(canal)
+    atualizarEstadoRetiradas(canal)
+    
 # Chamar sempre que lista de anuncios precisar ser atualizada
 def atualizarEstadoAnuncios(canal):
     global HASH_CONSENSUS, ANUNCIOS, ANUNCIOS_DISPONIVEIS
+    
+    ANUNCIOS = []
+    ANUNCIOS_DISPONIVEIS = []
     
     HASH_CONSENSUS = getConsensus(canal)
     ANUNCIOS_DISPONIVEIS = atualizaAnunciosDisponiveis(canal)
@@ -27,16 +46,16 @@ def atualizaAnunciosDisponiveis(canal):
                 status = definirDisponibilidadeAnuncio(canal, hash_post)
                 if status == "disponivel":
                     lista.append(hash_post)
-     return lista
-
+    return lista
+    
+# Chamar sempre que lista de Solicitações precisar ser atualizada
 def atualizarEstadoSolicitacoes(canal, chave):
-    global HASH_CONSENSUS, SOLICITACOES, SOLICITACOES_DISPONIVEIS
-    global SOLICITACOES_INDISPONIVEIS, SOLICITACOES_REJEITADAS
+    global HASH_CONSENSUS, SOLICITACOES, SOLICITACOES_DISPONIVEIS, SOLICITACOES_ACEITAS, SOLICITACOES_REJEITADAS
 
     HASH_CONSENSUS = getConsensus(canal)
     SOLICITACOES = []
     SOLICITACOES_DISPONIVEIS = []
-    SOLICITACOES_INDISPONIVEIS = []
+    SOLICITACOES_ACEITAS = []
     SOLICITACOES_REJEITADAS = []
 
     for hash_post in HASH_CONSENSUS:
@@ -49,11 +68,59 @@ def atualizarEstadoSolicitacoes(canal, chave):
                     if status == "disponivel":
                         SOLICITACOES_DISPONIVEIS.append(hash_post)
                     elif status == "aceita":
-                        SOLICITACOES_INDISPONIVEIS.append(hash_post)
+                        SOLICITACOES_ACEITAS.append(hash_post)
                     elif status == "rejeitada":
                         SOLICITACOES_REJEITADAS.append(hash_post)
+                        
+# Chamar sempre que lista de Recibos precisar ser atualizada
+def atualizarEstadoRecibos(canal):
+    global RECIBOS, HASH_CONSENSUS
+    
+    RECIBOS = []
+    HASH_CONSENSUS = getConsensus(canal)
+    
+    for hash_post in HASH_CONSENSUS:
+        if int(isLikeOrDislike(canal, hash_post)) == 0: # é bloco de conteúdo
+            if int(getTypeBloco(canal, hash_post)) == 6:  # é recibo
+                RECIBOS.append(hash_post)
+    atualizarEstadoAceites(canal)
+    atualizarEstadoRetiradas(canal)
 
-# Inicia o servidor na porta aleatória escolhida
+# Chamar sempre que lista de Aceites precisar ser atualizada
+def atualizarEstadoAceites(canal):
+    global HASH_CONSENSUS, ACEITES, ACEITES_DISPONIVEIS, KEY_PUB
+
+    HASH_CONSENSUS = getConsensus(canal)
+    ACEITES = []
+    ACEITES_DISPONIVEIS = []
+
+    for hash_post in HASH_CONSENSUS:
+        if int(isLikeOrDislike(canal, hash_post)) == 0:  # é bloco de conteúdo
+            if int(getTypeBloco(canal, hash_post)) == 3:  # é aceite
+                ACEITES.append(hash_post)
+                status = definirStatusAceite(canal, hash_post)
+                if status == 1:
+                    ACEITES_DISPONIVEIS.append(hash_post)
+    atualizarEstadoAnuncios(canal)
+    atualizarEstadoSolicitacoes(canal, KEY_PUB)
+                    
+# Chamar sempre que lista de retiradas precisar ser atualizada          
+def atualizarEstadoRetiradas(canal):
+    global HASH_CONSENSUS, RETIRADAS, RETIRADAS_ATIVAS
+
+    HASH_CONSENSUS = getConsensus(canal)
+    RETIRADAS = []
+    RETIRADAS_ATIVAS = []
+
+    for hash_post in HASH_CONSENSUS:
+        if int(isLikeOrDislike(canal, hash_post)) == 0:  # é bloco de conteúdo
+            if int(getTypeBloco(canal, hash_post)) == 4:  # é retirada
+                RETIRADAS.append(hash_post)
+                status = definirStatusRetirada(canal, hash_post)
+                if status == 1:
+                    RETIRADAS_ATIVAS.append(hash_post)
+
+# Inicia servidor na porta aleatória escolhida
 def inicializa():
     comando = f"./freechains-host --port={PORTA} start /tmp/freechains/host0{PORTA}"
     subprocess.Popen(["gnome-terminal", "--tab", "--", "bash", "-c", f"{comando}; exec bash"])
@@ -63,6 +130,10 @@ def inicializa():
     # Lista de peers que será usada na simulacao
     with open("contatos.txt", "a") as arquivo:
         arquivo.write(f"{PORTA}\n")
+
+def getKeys (chave_pvt, chave_pub):
+    global KEY_PUB
+    KEY_PUB = chave_pub
 
 # Sincroniza com os demais peers da lista de contatos     
 def sincronize(canal):
@@ -100,6 +171,11 @@ def dislike(canal, hash_post, chave):
     
     return resultado.stdout.strip()
 
+# Retorna o horario local
+def getTimestamp():
+    resultado = subprocess.run(["./freechains-host", "now", f"--port={PORTA}"], stdout=subprocess.PIPE, text=True)
+    return resultado.stdout.strip()
+
 # Recupera o conteúdo (payload) de um post a partir do seu hash
 def getPayload(hash_post, canal):   
     resultado = subprocess.run (["./freechains", f"--host=localhost:{PORTA}", "chain", canal, "get", "payload", hash_post], stdout=subprocess.PIPE, text=True)
@@ -132,6 +208,7 @@ def getBloco(canal, hash_post):
     
     return json.loads(saida)
     
+# Retorna o autor do bloco
 def getAutor(canal, hash_post):
     bloco = getBloco(canal, hash_post)
     
@@ -143,6 +220,7 @@ def getGenesis(canal):
     resultado = subprocess.run(["./freechains", f"--host=localhost:{PORTA}", "chain", canal, "genesis"], stdout=subprocess.PIPE, text=True)
     return resultado.stdout.strip()
     
+# Retorna se eh bloco de conteudo ou interacao
 def isLikeOrDislike(canal, hash_post):
     bloco = getBloco(canal, hash_post)
 
@@ -159,7 +237,8 @@ def getTypeBloco (canal, hash_post):
     bloco = getPayload(hash_post, canal)
     return bloco.get("Tipo_bloco", 0)
 
-def readFile (canal, arquivo, chave):
+# Le anuncios de arquivo
+def readFile (canal, arquivo, chave_pvt):
     with open(arquivo, "r", encoding="utf-8") as file:
         for linha in file:
             linha = linha.strip()
@@ -167,16 +246,22 @@ def readFile (canal, arquivo, chave):
                 continue  # ignora linhas vazias
 
             partes = linha.split("/")
+            criaAnuncio (canal, partes[1].strip(), partes[2].strip(), partes[3].strip(), partes[4].strip(), chave_pvt)
+    atualizarEstadoAnuncios(canal) # atualiza listas de anúncio  
 
-            item = {
-                "Tipo_bloco": partes[0].strip(),
-                "Titulo": partes[1].strip(),
-                "Descricao": partes[2].strip(),
-                "Tipo_transacao": partes[3].strip(),
-                "Prazo": partes[4].strip()
-            }
-            json_item = json.dumps(item, ensure_ascii=False)
-            postBloco(json_item, chave, canal)
+# cria bloco de anúncio manualmente
+def criaAnuncio (canal, titulo, descricao, tipo_transacao, prazo, chave_pvt):
+    item = {
+        "Tipo_bloco": 1,
+        "Titulo": titulo,
+        "Descricao": descricao,
+        "Tipo_transacao": tipo_transacao,
+        "Prazo": prazo
+    }
+    json_item = json.dumps(item, ensure_ascii=False)
+    hash_anuncio = postBloco(json_item, chave_pvt, canal)
+    atualizarEstadoAnuncios(canal) # atualiza listas de anúncio
+    return hash_anuncio
 
 # Exibe na tela o conteudo de um bloco do tipo anuncio
 def printAnuncio (canal, hash_post):
@@ -190,7 +275,7 @@ def printAnuncio (canal, hash_post):
     
     print("=== Anúncio ===")
     print(f"ID do bloco: {hash_post}")
-    print(f"Tipo do bloco: {tipo_bloco}")
+    #print(f"Tipo do bloco: {tipo_bloco}")
     print(f"Título: {titulo}")
     print(f"Descricao: {descricao}")
     print(f"Tipo de transação: {tipo_trans}")
@@ -321,9 +406,9 @@ def printSolicitacoesDisponiveis(canal):
     lista = SOLICITACOES_DISPONIVEIS
     printListaSolicitacoes (canal, lista)
     
-def printSolicitacoesIndisponiveis(canal):
-    global SOLICITACOES_INDISPONIVEIS
-    lista = SOLICITACOES_INDISPONIVEIS
+def printSolicitacoesAceitas(canal):
+    global SOLICITACOES_ACEITAS
+    lista = SOLICITACOES_ACEITAS
     printListaSolicitacoes (canal, lista)
     
 def printSolicitacoesRejeitadas(canal):
@@ -344,7 +429,7 @@ def printBuscaSolicitacoesChave(canal, chave):
 #Exibe as solicitações encontradas na busca
 def printBuscaSolicitacoesAnuncio(canal, hash_anuncio):
     lista = buscaSolicitacoesAnuncio (canal, hash_anuncio)
-    if not resultados:
+    if not lista:
         print(f"Nenhuma solicitacao registrada para o anúncio {hash_anuncio}")
         return
     printListaSolicitacoes (canal, lista)
@@ -413,6 +498,19 @@ def definirStatusSolicitacao(canal, hash_solicitacao):
             else:
                 return "rejeitada"
     return "disponivel"
+    
+# Classifica a retirada em ativa e inativa
+def definirStatusRetirada(canal, hash_retirada):
+    global RECIBOS
+    
+    for hash_post in RECIBOS:
+        bloco = getPayload(hash_post, canal)
+        anuncio = bloco.get("Anuncio")
+        bloco_anuncio = getPayload(anuncio, canal)
+        tipo_trans = bloco_anuncio.get("Tipo_transacao")
+        if bloco.get("Retirada") == hash_retirada and tipo_trans == "Troca":
+            return -1 #inativo
+    return 1 #ativo
     
 # Devolve o hash do anuncio ao qual a solicitacao se refere
 def getAnuncioSolicitacao(hash_post, canal):
@@ -486,6 +584,7 @@ def printEscolhaEmprestimo(canal, hash_anuncio, chave, mensagem, prazo):
         print("ERRO: bloco de aceite encontrado. Anuncio nao esta mais disponivel.")
     else:
         aceitarSolicitacao(canal, retorno, chave, mensagem, prazo)
+        atualizarEstadoAceites(canal)
         print(f"Solicitacao {retorno} escolhida para {hash_anuncio}. Bloco de aceite gerado com sucesso!")
 
 # Exibe a lista de anúncios de troca disponíveis para a escolha de um usuário específico
@@ -499,8 +598,8 @@ def printAnunciosTrocaDisponiveis(canal, chave):
             printAnuncio(canal, hash_anuncio)
             
 def printSolicitacoesTrocaAnunciosDisponiveis (canal, chave):
-    disponiveis = getAnunciosDisponiveis(canal)
-    disponiveisAutor = getAnunciosAutor(canal, disponiveis, chave)
+    global ANUNCIOS_DISPONIVEIS
+    disponiveisAutor = getAnunciosAutor(canal, ANUNCIOS_DISPONIVEIS, chave)
     
     if not disponiveisAutor:
         print(f"Nenhum anúncio próprio disponível.")
@@ -539,13 +638,17 @@ def printAceite (canal, hash_post):
     msg = bloco.get("Mensagem", "Nao especificado")
     prazo = bloco.get("Prazo", "Nao especificado")
     
-    print("=== Solicitacao ===")
+    bloco_anuncio = getPayload(anuncio, canal)
+    tipo_trans = bloco_anuncio.get("Tipo_transacao")
+    
+    print("=== Aceite ===")
     print(f"ID do bloco: {hash_post}")
-    print(f"Tipo do bloco: {tipo_bloco}")
+    #print(f"Tipo do bloco: {tipo_bloco}")
     print(f"Solicitacao: {solicitacao}")
     print(f"Anuncio: {anuncio}")
     print(f"Mensagem: {msg}")
-    print(f"Prazo: {prazo}")
+    if tipo_trans == "Emprestimo":
+        print(f"Prazo: {prazo}")
     print("================\n")
 
 #Exibe todos os blocos de aceite da cadeia
@@ -557,6 +660,16 @@ def printAllAceite(canal):
             tipo2 = int(getTypeBloco(canal, hash_post))
             if tipo2 == 3:
                 printAceite(canal, hash_post)
+                
+# Classifica os aceites em disponivel e indisponivel
+def definirStatusAceite(canal, hash_aceite):
+    global RECIBOS
+    
+    for hash_post in RECIBOS:
+        bloco = getPayload(hash_post, canal)
+        if bloco.get("Aceite") == hash_aceite:
+            return -1 #indisponivel
+    return 1 #disponivel
   
  # Cria bloco de avaliação
 def registrarAvaliacao (canal, hash_post, mensagem, tipo_interacao, chave):
@@ -569,12 +682,224 @@ def registrarAvaliacao (canal, hash_post, mensagem, tipo_interacao, chave):
         "Tipo_bloco": 0,
         "Ref_interacao": ref_interacao, #hash do bloco de like/dislike
         "Ref_bloco": hash_post,         #hash do bloco avaliado
-        "Ref_autor": autor,              #hash do autor do bloco que foi avaliado
+        "Ref_user": autor,              #hash do usuário do bloco que foi avaliado
         "Mensagem": mensagem            #motivo da avaliação
     }
 
     json_item = json.dumps(item, ensure_ascii=False)
-    resultado = postBloco(json_item, chave, canal)
+    hash_avaliacao = postBloco(json_item, chave, canal)
     
+    return hash_avaliacao
+
+# Exibe um bloco de avaliacao
+def printAvaliacao (canal, hash_post):
+    bloco = getPayload(hash_post, canal)
+    
+    tipo_bloco = bloco.get("Tipo_bloco")
+    interacao = bloco.get("Ref_interacao")
+    usuario = bloco.get("Ref_user")
+    msg = bloco.get("Mensagem")
+    
+    print("=== Avaliacao ===")
+    print(f"ID do bloco: {hash_post}")
+    print(f"Tipo do bloco: {tipo_bloco}")
+    print(f"ID like/dislike: {interacao}")
+    print(f"Usuario Avaliado: {usuario}")
+    print(f"Mensagem: {msg}")
+    print("================\n")
+
+
+# Identifica se aceite eh de um anuncio de troca ou devolucao
+def identificaTipoTransacao(canal, hash_aceite):
+    bloco = getPayload(hash_aceite, canal)
+    anuncio = bloco.get("Anuncio")
+    bloco = getPayload(anuncio, canal)
+    tipo_trans = bloco.get("Tipo_transacao")
+    
+    return tipo_trans
+
+# Retorna o hash do anuncio de um bloco de aceite 
+def getAnuncioAceite(canal, hash_aceite):
+    bloco = getPayload(hash_aceite, canal)
+    return bloco.get("Anuncio")
+    
+# Retorna o hash da solicitacao de um bloco de aceite    
+def getSolicitacaoAceite(canal, hash_aceite):
+    bloco = getPayload(hash_aceite, canal)
+    return bloco.get("Solicitacao")
+    
+# Exibe na tela todos os aceites de uma lista genérica
+def printListaAceites (canal, lista):
+    if not lista:
+        print("Nenhum aceite para exibir.")
+        return
+    for hash_post in lista:
+        printAceite(canal, hash_post)
+        
+# Exibe todos os aceites disponiveis da cadeia
+def printAceitesDisponiveis(canal):
+    global ACEITES_DISPONIVEIS
+    printListaAceites (canal, ACEITES_DISPONIVEIS)
+    
+# Cria bloco de retirada
+def criarRetirada(canal, chave, hash_aceite, mensagem):
+    item = {
+        "Tipo_bloco": 4,
+        "Aceite": hash_aceite,
+        "Mensagem":mensagem
+    }
+    json_item = json.dumps(item, ensure_ascii=False)
+    hash_bloco = postBloco(json_item, chave, canal)
+    return hash_bloco
+    
+# Exibe um bloco de retirada
+def printRetirada (canal, hash_post):
+    bloco = getPayload(hash_post, canal)
+    
+    tipo_bloco = bloco.get("Tipo_bloco")
+    aceite = bloco.get("Aceite")
+    msg = bloco.get("Mensagem")
+    
+    print("=== Retirada ===")
+    print(f"ID do bloco: {hash_post}")
+    #print(f"Tipo do bloco: {tipo_bloco}")
+    print(f"Aceite: {aceite}")
+    print(f"Mensagem: {msg}")
+    print("================\n")
+
+# Exibe na tela todos as retiradas de uma lista genérica
+def printListaRetiradas (canal, lista):
+    if not lista:
+        print("Nenhuma retirada para exibir.")
+        return
+    for hash_post in lista:
+        printRetirada(canal, hash_post)
+        
+# Exibe as retiradas ativas (que precisam de devolucao)
+def printRetiradasAtivas(canal):
+    global RETIRADAS_ATIVAS
+    if not RETIRADAS_ATIVAS:
+        print("Nenhuma retirada precisando de devolucao.")
+        return
+    printListaRetiradas (canal, RETIRADAS_ATIVAS)
+
+# Cria bloco de devolucao
+def criarDevolucao(canal, chave, hash_aceite, hash_retirada, mensagem):
+    item = {
+        "Tipo_bloco": 5,
+        "Aceite": hash_aceite,
+        "Retirada": hash_retirada,
+        "Mensagem":mensagem
+    }
+    json_item = json.dumps(item, ensure_ascii=False)
+    hash_bloco = postBloco(json_item, chave, canal)
+    return hash_bloco
+    
+# Exibe um bloco de devolucao
+def printDevolucao (canal, hash_post):
+    bloco = getPayload(hash_post, canal)
+    
+    tipo_bloco = bloco.get("Tipo_bloco")
+    aceite = bloco.get("Aceite")
+    retirada = bloco.get("Retirada")
+    msg = bloco.get("Mensagem")
+    
+    print("=== Devolucao ===")
+    print(f"ID do bloco: {hash_post}")
+    #print(f"Tipo do bloco: {tipo_bloco}")
+    print(f"Aceite: {aceite}")
+    print(f"Retirada: {retirada}")
+    print(f"Mensagem: {msg}")
+    print("================\n")
+
+# Cria bloco de recibo que indica finalizacao da transacao
+def criarReciboTransacao(canal, chave, hash_anuncio, hash_solicitacao, hash_aceite, hash_retirada, hash_devolucao):
+    item = {
+        "Tipo_bloco": 6,
+        "Anuncio": hash_anuncio,
+        "Solicitacao": hash_solicitacao,
+        "Aceite": hash_aceite,
+        "Retirada": hash_retirada,
+        "Devolucao": hash_devolucao
+    }
+
+    json_item = json.dumps(item, ensure_ascii=False)
+    hash_bloco = postBloco(json_item, chave, canal)
+    return hash_bloco
+    
+# Exibe um bloco de recibo
+def printRecibo (canal, hash_post):
+    bloco = getPayload(hash_post, canal)
+    
+    tipo_bloco = bloco.get("Tipo_bloco")
+    anuncio = bloco.get("Anuncio")
+    solicitacao = bloco.get("Solicitacao")
+    aceite = bloco.get("Aceite")
+    retirada = bloco.get("Retirada")
+    devolucao = bloco.get("Devolucao")
+    
+    print("=== Recibo ===")
+    print(f"ID do bloco: {hash_post}")
+    print(f"Tipo do bloco: {tipo_bloco}")
+    print(f"Anuncio: {anuncio}")
+    print(f"Solicitacao: {solicitacao}")
+    print(f"Aceite: {aceite}")
+    print(f"Retirada: {retirada}")
+    print(f"Devolucao: {devolucao}")
+    print("================\n")
+    
+# Exibe na tela todos os anúncios de uma lista genérica
+def printListaRecibos (canal, lista):
+    if not lista:
+        print("Nenhum recibo para exibir.")
+        return
+    for hash_post in lista:
+        printRecibo(canal, hash_post)
+        
+# Exibe todos os recibos da cadeia
+def printRecibosCadeia(canal):
+    global RECIBOS
+    printListaRecibos (canal, RECIBOS)
+
+# Registra uma retirada, finalizando a transacao se for troca
+def registrarRetirada(canal, chave_privada, hash_aceite, mensagem):
+    tipo_transacao = identificaTipoTransacao(canal, hash_aceite)
+    hash_retirada = criarRetirada(canal, chave_privada, hash_aceite, mensagem)
+    atualizarEstadoRetiradas(canal) #atualiza global RETIRADAS
+    
+    if tipo_transacao == "Troca":
+        hash_solicitacao = getSolicitacaoAceite(canal, hash_aceite)
+        hash_anuncio = getAnuncioAceite(canal, hash_aceite)
+        hash_recibo = criarReciboTransacao(canal, chave_privada, hash_anuncio, hash_solicitacao, hash_aceite, hash_retirada, "0")
+        atualizarEstadoRecibos(canal) #atualizar global RECIBOS
+        print(f"Retirada de troca nao precisa de devolucao.\nRecibo {hash_recibo} de finalizacao registrado com sucesso!")
+        
+    return hash_retirada
+
+# Retorna o hash_aceite a partir de um bloco de retirada
+def getAceiteRetirada(canal, hash_retirada):
+    bloco = getPayload(hash_retirada, canal)
+    return bloco.get("Aceite")
+    
+#Registra uma devolucao e finaliza a transacao
+def registrarDevolucao(canal, chave_privada, hash_retirada, mensagem):
+    hash_aceite = getAceiteRetirada(canal, hash_retirada)
+    tipo_transacao = identificaTipoTransacao(canal, hash_aceite)
+                
+    if tipo_transacao == "Emprestimo":
+        hash_devolucao = criarDevolucao(canal, chave_privada, hash_aceite, hash_retirada, mensagem)
+        hash_solicitacao = getSolicitacaoAceite(canal, hash_aceite)
+        hash_anuncio = getAnuncioAceite(canal, hash_aceite)
+        criarReciboTransacao(canal, chave_privada, hash_anuncio, hash_solicitacao, hash_aceite, hash_retirada, hash_devolucao)
+        atualizarEstadoRecibos(canal) #atualizar global RECIBOS
+        return hash_devolucao
+    
+    else:
+        print("Transacao de Troca nao aceita devolucao.")
+        
+def getAnunciosAutor(canal, hash_list, chave):
+    resultado = []
+    for hash_post in hash_list:
+        if getAutor(canal, hash_post) == chave:
+            resultado.append(hash_post)
     return resultado
- 
